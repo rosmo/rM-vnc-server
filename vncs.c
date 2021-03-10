@@ -10,6 +10,11 @@
 #include <rfb/keysym.h>
 #include <rM-input-devices.h>
 
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
 #include "backend.h"
 
 /* Used by the signal handler */
@@ -110,6 +115,28 @@ void handle_wacom_event(void *data, int pen_down, int touch_down,
 }
 
 int main(int argc, char *argv[]) {
+  int input_fd = 0;
+
+  while ((c = getopt (argc, argv, "s:")) != -1)
+    switch (c)
+      {
+      case 's':
+        input_fd = atoi((string *)optarg);
+        break;
+      case '?':
+        if (optopt == 's')
+          fprintf (stderr, "Option -%c requires an argument.\n", optopt);
+        else if (isprint (optopt))
+          fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+        else
+          fprintf (stderr,
+                   "Unknown option character `\\x%x'.\n",
+                   optopt);
+        return 1;
+      default:
+        abort ();
+      }
+
   /* Work out framebuffer parameters */
   struct backend **backends = get_backends();
   if (!backends || !backends[0]) { return 1; }
@@ -157,6 +184,9 @@ int main(int argc, char *argv[]) {
   server->kbdAddEvent = process_kbd_event;
 
   /* Start serving */
+  if (input_fd > 0) { // Use existing fd for socket (eg. for systemd, fd 3)
+    server->inetdSocket = (rfbSocket)input_fd;
+  }
   rfbInitServer(server);
   rfbRunEventLoop(server, -1, 1);
 
